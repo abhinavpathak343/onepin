@@ -279,31 +279,40 @@ export default function ScanPage() {
         </motion.div>
       )}
 
-      {scannerState === 'requesting-permission' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="bg-[#1a2332] border border-[#2a3542] rounded-2xl p-6 max-w-sm w-full text-center"
-        >
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-[#FF6B35]/25 border-t-[#FF6B35]" />
-          <h2 className="text-lg font-semibold text-[#F7F6F2] mb-2">
-            Waiting For Permission
-          </h2>
-          <p className="text-[#F7F6F2]/70 text-sm">
-            Approve the browser prompt to continue.
-          </p>
-        </motion.div>
-      )}
-
-      <div
-        className={`w-full max-w-sm ${
-          scannerState === 'ready' ? 'block' : 'hidden'
-        }`}
-      >
+      <div className="relative w-full max-w-sm">
         <div
           id="qr-reader"
-          className="rounded-2xl overflow-hidden [&>div]:[border-radius:1rem!important]"
+          className={`overflow-hidden rounded-2xl border border-[#2a3542] bg-black/25 shadow-2xl ${
+            scannerState === 'idle' || scannerState === 'permission-denied' || scannerState === 'error'
+              ? 'hidden'
+              : 'block'
+          } [&_video]:h-full [&_video]:w-full [&_video]:object-cover [&>div]:[border-radius:1rem!important]`}
+          style={{ minHeight: 360 }}
         />
+
+        {scannerState === 'requesting-permission' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-[#1a2332]/78 p-6 text-center backdrop-blur-sm"
+          >
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-[#FF6B35]/25 border-t-[#FF6B35]" />
+            <h2 className="text-lg font-semibold text-[#F7F6F2] mb-2">
+              Waiting For Permission
+            </h2>
+            <p className="text-[#F7F6F2]/70 text-sm">
+              Approve the browser prompt to continue.
+            </p>
+          </motion.div>
+        )}
+
+        {scannerState === 'ready' && (
+          <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+            <div className="rounded-full bg-black/45 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#F7F6F2]/85 backdrop-blur-sm">
+              Live Camera
+            </div>
+          </div>
+        )}
       </div>
 
       {scannerState === 'permission-denied' && (

@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Html5QrcodeScanner, Html5QrcodeScanType } from 'html5-qrcode';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Phone, User, Gift, Zap, Target, Trophy } from 'lucide-react';
+import { Camera, Phone, User, Gift, Zap, Target, Trophy, ShieldAlert } from 'lucide-react';
 
 type Step = 'scanning' | 'phone' | 'name' | 'result';
-type ScannerState = 'loading' | 'permission-denied' | 'ready' | 'error';
+type ScannerState = 'idle' | 'requesting-permission' | 'permission-denied' | 'ready' | 'error';
 
 interface QRData {
   academyId: string;
@@ -35,21 +35,21 @@ interface CheckInResult {
 }
 
 export default function ScanPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const prefillAcademyId = searchParams?.get('academyId');
 
   const [step, setStep] = useState<Step>('scanning');
-  const [scannerState, setScannerState] = useState<ScannerState>('loading');
+  const [scannerState, setScannerState] = useState<ScannerState>('idle');
   const [qrData, setQrData] = useState<QRData | null>(null);
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [result, setResult] = useState<CheckInResult | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scannerError, setScannerError] = useState<string | null>(null);
 
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerInitializedRef = useRef(false);
 
   const handleScanSuccess = useCallback((decodedText: string) => {
     try {
@@ -61,7 +61,17 @@ export default function ScanPage() {
     }
   }, []);
 
-  useEffect(() => {
+  const cleanupScanner = useCallback(() => {
+    if (scannerRef.current) {
+      scannerRef.current.clear().catch(() => {});
+      scannerRef.current = null;
+    }
+    scannerInitializedRef.current = false;
+  }, []);
+
+  const initializeScanner = useCallback(() => {
+    if (scannerInitializedRef.current) return;
+
     try {
       const config = {
         fps: 10,
@@ -71,33 +81,81 @@ export default function ScanPage() {
       };
 
       scannerRef.current = new Html5QrcodeScanner('qr-reader', config, false);
+      scannerInitializedRef.current = true;
 
       scannerRef.current.render(
         handleScanSuccess,
         (errorMessage: string) => {
           if (errorMessage.includes('NotAllowedError') || errorMessage.includes('Permission denied')) {
             setScannerState('permission-denied');
-            setHasPermission(false);
+            setScannerError('Camera permission was denied. Please allow access in your browser settings.');
+            cleanupScanner();
           } else if (errorMessage.includes('No camera found')) {
             setScannerState('error');
-            setError('No camera found on this device.');
+            setScannerError('No camera found on this device.');
           }
         }
       );
 
       setScannerState('ready');
-      setHasPermission(true);
+      setScannerError(null);
     } catch (err) {
       console.error('Scanner error:', err);
       setScannerState('error');
+      setScannerError('Unable to start the QR scanner on this device.');
+    }
+  }, [cleanupScanner, handleScanSuccess]);
+
+  const requestCameraAccess = useCallback(async () => {
+    setScannerState('requesting-permission');
+    setScannerError(null);
+
+    try {
+      if (!window.isSecureContext) {
+        throw new Error('Camera access requires a secure context. Open this on localhost or HTTPS.');
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('This browser does not support camera access.');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+        },
+        audio: false,
+      });
+
+      stream.getTracks().forEach((track) => track.stop());
+      initializeScanner();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to access camera.';
+      const denied =
+        message.includes('denied') ||
+        message.includes('NotAllowedError') ||
+        message.includes('Permission');
+
+      setScannerState(denied ? 'permission-denied' : 'error');
+      setScannerError(message);
+      cleanupScanner();
+    }
+  }, [cleanupScanner, initializeScanner]);
+
+  useEffect(() => {
+    if (prefillAcademyId) {
+      setError(null);
     }
 
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(() => {});
-      }
+      cleanupScanner();
     };
-  }, [handleScanSuccess]);
+  }, [cleanupScanner, prefillAcademyId]);
+
+  useEffect(() => {
+    if (step !== 'scanning') {
+      cleanupScanner();
+    }
+  }, [cleanupScanner, step]);
 
   const handleSubmitPhone = async () => {
     if (!phone || phone.length < 10) {
@@ -181,25 +239,68 @@ export default function ScanPage() {
         </p>
       </motion.div>
 
+      {scannerState === 'idle' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="bg-[#1a2332] border border-[#2a3542] rounded-2xl p-6 max-w-sm w-full text-center"
+        >
+          <Camera className="w-10 h-10 text-[#FF6B35] mx-auto mb-4" />
+          <h2 className="text-lg font-semibold text-[#F7F6F2] mb-2">
+            Enable Camera
+          </h2>
+          <p className="text-[#F7F6F2]/70 text-sm mb-5">
+            Tap below to allow camera access and start scanning the kiosk QR code.
+          </p>
+          <button
+            onClick={requestCameraAccess}
+            className="bg-[#FF6B35] text-white px-6 py-3 rounded-full font-medium"
+          >
+            Allow Camera Access
+          </button>
+        </motion.div>
+      )}
+
+      {scannerState === 'requesting-permission' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="bg-[#1a2332] border border-[#2a3542] rounded-2xl p-6 max-w-sm w-full text-center"
+        >
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-[#FF6B35]/25 border-t-[#FF6B35]" />
+          <h2 className="text-lg font-semibold text-[#F7F6F2] mb-2">
+            Waiting For Permission
+          </h2>
+          <p className="text-[#F7F6F2]/70 text-sm">
+            Approve the browser prompt to continue.
+          </p>
+        </motion.div>
+      )}
+
       {scannerState === 'permission-denied' && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="bg-[#FF6B35]/10 border border-[#FF6B35]/30 rounded-2xl p-6 max-w-sm w-full text-center"
         >
-          <Camera className="w-10 h-10 text-[#FF6B35] mx-auto mb-4" />
+          <ShieldAlert className="w-10 h-10 text-[#FF6B35] mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-[#F7F6F2] mb-2">
             Camera Access Required
           </h2>
           <p className="text-[#F7F6F2]/70 text-sm mb-4">
-            To scan the check-in code, we need access to your camera. Please enable camera permissions and refresh this page.
+            {scannerError || 'To scan the check-in code, we need access to your camera. Please enable camera permissions and try again.'}
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-[#FF6B35] text-white px-6 py-2 rounded-full font-medium"
-          >
-            Refresh Page
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={requestCameraAccess}
+              className="bg-[#FF6B35] text-white px-6 py-3 rounded-full font-medium"
+            >
+              Try Again
+            </button>
+            <p className="text-xs text-[#F7F6F2]/55">
+              If you blocked it earlier, unlock camera access from the browser site settings first.
+            </p>
+          </div>
         </motion.div>
       )}
 
@@ -209,7 +310,13 @@ export default function ScanPage() {
           animate={{ opacity: 1 }}
           className="bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-2xl p-6 max-w-sm w-full text-center"
         >
-          <p className="text-[#F7F6F2]">{error || 'Unable to access camera'}</p>
+          <p className="text-[#F7F6F2]">{scannerError || 'Unable to access camera'}</p>
+          <button
+            onClick={requestCameraAccess}
+            className="mt-4 bg-[#FF6B35] text-white px-6 py-3 rounded-full font-medium"
+          >
+            Retry Camera
+          </button>
         </motion.div>
       )}
 

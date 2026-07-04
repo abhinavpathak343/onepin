@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Html5QrcodeScanner, Html5QrcodeScanType } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, Phone, User, Gift, Zap, Target, Trophy, ShieldAlert } from 'lucide-react';
 
@@ -48,7 +48,7 @@ export default function ScanPage() {
   const [error, setError] = useState<string | null>(null);
   const [scannerError, setScannerError] = useState<string | null>(null);
 
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerInitializedRef = useRef(false);
 
   const handleScanSuccess = useCallback((decodedText: string) => {
@@ -63,27 +63,39 @@ export default function ScanPage() {
 
   const cleanupScanner = useCallback(() => {
     if (scannerRef.current) {
-      scannerRef.current.clear().catch(() => {});
+      const scanner = scannerRef.current;
       scannerRef.current = null;
+      scanner.stop().catch(() => {}).finally(() => {
+        scanner.clear();
+      });
     }
     scannerInitializedRef.current = false;
   }, []);
 
-  const initializeScanner = useCallback(() => {
+  const initializeScanner = useCallback(async () => {
     if (scannerInitializedRef.current) return;
 
     try {
-      const config = {
-        fps: 10,
-        qrbox: { width: 280, height: 280 },
-        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-        rememberLastUsedCamera: false,
-      };
-
-      scannerRef.current = new Html5QrcodeScanner('qr-reader', config, false);
+      const scanner = new Html5Qrcode('qr-reader');
+      scannerRef.current = scanner;
       scannerInitializedRef.current = true;
 
-      scannerRef.current.render(
+      const cameras = await Html5Qrcode.getCameras();
+      const preferredCamera =
+        cameras.find((camera) => /back|rear|environment/i.test(camera.label)) ||
+        cameras[0];
+
+      if (!preferredCamera) {
+        throw new Error('No camera found on this device.');
+      }
+
+      await scanner.start(
+        preferredCamera.id,
+        {
+        fps: 10,
+        qrbox: { width: 280, height: 280 },
+          aspectRatio: 1,
+        },
         handleScanSuccess,
         (errorMessage: string) => {
           if (errorMessage.includes('NotAllowedError') || errorMessage.includes('Permission denied')) {
@@ -101,8 +113,14 @@ export default function ScanPage() {
       setScannerError(null);
     } catch (err) {
       console.error('Scanner error:', err);
+      scannerInitializedRef.current = false;
+      if (scannerRef.current) {
+        scannerRef.current.clear();
+        scannerRef.current = null;
+      }
+      const message = err instanceof Error ? err.message : 'Unable to start the QR scanner on this device.';
       setScannerState('error');
-      setScannerError('Unable to start the QR scanner on this device.');
+      setScannerError(message);
     }
   }, [cleanupScanner, handleScanSuccess]);
 
@@ -127,7 +145,7 @@ export default function ScanPage() {
       });
 
       stream.getTracks().forEach((track) => track.stop());
-      initializeScanner();
+      await initializeScanner();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to access camera.';
       const denied =

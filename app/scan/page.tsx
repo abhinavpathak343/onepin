@@ -295,6 +295,17 @@ export default function ScanPage() {
         </motion.div>
       )}
 
+      <div
+        className={`w-full max-w-sm ${
+          scannerState === 'ready' ? 'block' : 'hidden'
+        }`}
+      >
+        <div
+          id="qr-reader"
+          className="rounded-2xl overflow-hidden [&>div]:[border-radius:1rem!important]"
+        />
+      </div>
+
       {scannerState === 'permission-denied' && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -336,15 +347,6 @@ export default function ScanPage() {
             Retry Camera
           </button>
         </motion.div>
-      )}
-
-      {scannerState === 'ready' && (
-        <div className="w-full max-w-sm">
-          <div
-            id="qr-reader"
-            className="rounded-2xl overflow-hidden [&>div]:[border-radius:1rem!important]"
-          />
-        </div>
       )}
     </div>
   );

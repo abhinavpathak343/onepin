@@ -1,0 +1,15 @@
+
+> nextjs@0.1.0 dev
+> next dev
+
+  ▲ Next.js 13.5.1
+  - Local:        http://localhost:3000
+
+ ✓ Ready in 5s
+ ✓ Compiled /api/qr/[academyId]/route in 403ms (34 modules)
+ ✓ Compiled /api/checkin/route in 588ms (47 modules)
+ ✓ Compiled /api/student/route in 78ms (49 modules)
+ ○ compiling /not-found ...
+ ✓ Compiled /not-found in 4.9s (517 modules)
+ ✓ Compiled in 506ms (258 modules)
+[?25h

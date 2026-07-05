@@ -128,8 +128,8 @@ function createSeedData(): DemoStore {
     students: [
       {
         _id: studentId,
-        phone: '9999999999',
-        name: 'Demo Student',
+        phone: '9876543210',
+        name: 'Pawan',
         points: 48,
         currentStreak: 4,
         longestStreak: 4,

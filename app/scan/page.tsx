@@ -4,13 +4,14 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Phone, User, Gift, Zap, Target, Trophy, ShieldAlert, LockKeyhole } from 'lucide-react';
+import { Camera, Gift, Zap, Target, Trophy, ShieldAlert, LockKeyhole } from 'lucide-react';
 
-type Step = 'login' | 'scanning' | 'phone' | 'name' | 'result';
+type Step = 'login' | 'scanning' | 'result';
 type ScannerState = 'idle' | 'requesting-permission' | 'permission-denied' | 'ready' | 'error';
 
 const SCAN_DEMO_USERNAME = 'pawan';
 const SCAN_DEMO_PASSWORD = 'onepin';
+const SCAN_DEMO_PHONE = '9876543210';
 const SCAN_LOGIN_STORAGE_KEY = 'scan-demo-authenticated';
 
 interface QRData {
@@ -45,8 +46,6 @@ export default function ScanPage() {
   const [step, setStep] = useState<Step>('login');
   const [scannerState, setScannerState] = useState<ScannerState>('idle');
   const [qrData, setQrData] = useState<QRData | null>(null);
-  const [phone, setPhone] = useState('');
-  const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [result, setResult] = useState<CheckInResult | null>(null);
@@ -56,16 +55,6 @@ export default function ScanPage() {
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerInitializedRef = useRef(false);
-
-  const handleScanSuccess = useCallback((decodedText: string) => {
-    try {
-      const data: QRData = JSON.parse(decodedText);
-      setQrData(data);
-      setStep('phone');
-    } catch (e) {
-      setError('Invalid QR code. Please scan the kiosk screen.');
-    }
-  }, []);
 
   const cleanupScanner = useCallback(() => {
     if (scannerRef.current) {
@@ -77,6 +66,49 @@ export default function ScanPage() {
     }
     scannerInitializedRef.current = false;
   }, []);
+
+  const submitCheckIn = useCallback(async (payload: QRData) => {
+    setChecking(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          qrData: payload,
+          phone: SCAN_DEMO_PHONE,
+          name: 'Pawan',
+        }),
+      });
+
+      const data = await res.json();
+      setResult(data);
+
+      if (data.success) {
+        setStep('result');
+      } else if (data.error) {
+        setError(data.error);
+        setStep('result');
+      }
+    } catch (err) {
+      setError('Check-in failed. Please try again.');
+      setStep('result');
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
+  const handleScanSuccess = useCallback((decodedText: string) => {
+    try {
+      const data: QRData = JSON.parse(decodedText);
+      setQrData(data);
+      cleanupScanner();
+      void submitCheckIn(data);
+    } catch (e) {
+      setError('Invalid QR code. Please scan the kiosk screen.');
+    }
+  }, [cleanupScanner, submitCheckIn]);
 
   const initializeScanner = useCallback(async () => {
     if (scannerInitializedRef.current) return;
@@ -201,73 +233,8 @@ export default function ScanPage() {
     setError(null);
     setUsername('');
     setPassword('');
+    setResult(null);
     setStep('scanning');
-  };
-
-  const handleSubmitPhone = async () => {
-    if (!phone || phone.length < 10) {
-      setError('Please enter a valid phone number');
-      return;
-    }
-
-    setChecking(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/checkin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          qrData,
-          phone,
-        }),
-      });
-
-      const data = await res.json();
-      setResult(data);
-
-      if (data.needName) {
-        setStep('name');
-      } else if (data.success) {
-        setStep('result');
-      } else if (data.error) {
-        setError(data.error);
-      }
-    } catch (err) {
-      setError('Check-in failed. Please try again.');
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const handleSubmitName = async () => {
-    if (!name || name.length < 2) {
-      setError('Please enter your name');
-      return;
-    }
-
-    setChecking(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/checkin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          qrData,
-          phone,
-          name,
-        }),
-      });
-
-      const data = await res.json();
-      setResult(data);
-      setStep('result');
-    } catch (err) {
-      setError('Check-in failed. Please try again.');
-    } finally {
-      setChecking(false);
-    }
   };
 
   const renderScanning = () => (
@@ -285,6 +252,17 @@ export default function ScanPage() {
           Point your camera at the kiosk QR code
         </p>
       </motion.div>
+
+      {checking && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="mb-5 w-full max-w-sm rounded-2xl border border-[#2a3542] bg-[#1a2332] p-4 text-center"
+        >
+          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-[#FF6B35]/25 border-t-[#FF6B35]" />
+          <p className="text-sm text-[#F7F6F2]/75">Processing your check-in...</p>
+        </motion.div>
+      )}
 
       {scannerState === 'idle' && (
         <motion.div
@@ -450,114 +428,6 @@ export default function ScanPage() {
     </motion.div>
   );
 
-  const renderPhone = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen bg-[#0B1220] flex flex-col items-center justify-center p-6"
-    >
-      <div className="w-full max-w-sm">
-        <motion.div className="text-center mb-8">
-          <Phone className="w-12 h-12 text-[#FF6B35] mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-[#F7F6F2] mb-2 font-['Space_Grotesk',sans-serif]">
-            Your Phone Number
-          </h1>
-          <p className="text-[#F7F6F2]/60 text-sm">
-            This identifies your check-in history
-          </p>
-        </motion.div>
-
-        {error && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-xl p-4 mb-4 text-center"
-          >
-            <p className="text-[#ef4444] text-sm">{error}</p>
-          </motion.div>
-        )}
-
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
-          placeholder="Enter your phone number"
-          className="w-full bg-[#1a2332] border border-[#2a3542] rounded-xl px-4 py-4 text-lg text-center text-[#F7F6F2] placeholder-[#F7F6F2]/40 focus:outline-none focus:border-[#FF6B35] transition-colors"
-          autoFocus
-        />
-
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={handleSubmitPhone}
-          disabled={checking || phone.length < 10}
-          className="w-full mt-4 bg-[#FF6B35] disabled:bg-[#FF6B35]/50 text-white py-4 rounded-xl font-semibold text-lg transition-colors"
-        >
-          {checking ? 'Checking in...' : 'Continue'}
-        </motion.button>
-
-        <button
-          onClick={() => {
-            setQrData(null);
-            setStep('scanning');
-          }}
-          className="w-full mt-3 text-[#F7F6F2]/60 py-2 text-sm"
-        >
-          Scan again
-        </button>
-      </div>
-    </motion.div>
-  );
-
-  const renderName = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen bg-[#0B1220] flex flex-col items-center justify-center p-6"
-    >
-      <div className="w-full max-w-sm">
-        <motion.div className="text-center mb-8">
-          <User className="w-12 h-12 text-[#FF6B35] mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-[#F7F6F2] mb-2 font-['Space_Grotesk',sans-serif]">
-            Welcome!
-          </h1>
-          <p className="text-[#F7F6F2]/60 text-sm">
-            First time here? Tell us your name
-          </p>
-        </motion.div>
-
-        {error && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-xl p-4 mb-4 text-center"
-          >
-            <p className="text-[#ef4444] text-sm">{error}</p>
-          </motion.div>
-        )}
-
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Enter your name"
-          className="w-full bg-[#1a2332] border border-[#2a3542] rounded-xl px-4 py-4 text-lg text-center text-[#F7F6F2] placeholder-[#F7F6F2]/40 focus:outline-none focus:border-[#FF6B35] transition-colors"
-          autoFocus
-        />
-
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={handleSubmitName}
-          disabled={checking || name.length < 2}
-          className="w-full mt-4 bg-[#FF6B35] disabled:bg-[#FF6B35]/50 text-white py-4 rounded-xl font-semibold text-lg transition-colors"
-        >
-          {checking ? 'Registering...' : 'Complete Check-in'}
-        </motion.button>
-      </div>
-    </motion.div>
-  );
-
   const renderResult = () => {
     if (!result || !result.success) {
       return (
@@ -571,8 +441,6 @@ export default function ScanPage() {
             <button
               onClick={() => {
                 setQrData(null);
-                setPhone('');
-                setName('');
                 setResult(null);
                 setError(null);
                 setStep('scanning');
@@ -754,8 +622,6 @@ export default function ScanPage() {
             whileTap={{ scale: 0.98 }}
             onClick={() => {
               setQrData(null);
-              setPhone('');
-              setName('');
               setResult(null);
               setError(null);
               setStep('scanning');
@@ -773,8 +639,6 @@ export default function ScanPage() {
     <AnimatePresence mode="wait">
       {step === 'login' && <div key="login">{renderLogin()}</div>}
       {step === 'scanning' && <div key="scanning">{renderScanning()}</div>}
-      {step === 'phone' && <div key="phone">{renderPhone()}</div>}
-      {step === 'name' && <div key="name">{renderName()}</div>}
       {step === 'result' && <div key="result">{renderResult()}</div>}
     </AnimatePresence>
   );

@@ -4,10 +4,14 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Phone, User, Gift, Zap, Target, Trophy, ShieldAlert } from 'lucide-react';
+import { Camera, Phone, User, Gift, Zap, Target, Trophy, ShieldAlert, LockKeyhole } from 'lucide-react';
 
-type Step = 'scanning' | 'phone' | 'name' | 'result';
+type Step = 'login' | 'scanning' | 'phone' | 'name' | 'result';
 type ScannerState = 'idle' | 'requesting-permission' | 'permission-denied' | 'ready' | 'error';
+
+const SCAN_DEMO_USERNAME = 'pawan';
+const SCAN_DEMO_PASSWORD = 'onepin';
+const SCAN_LOGIN_STORAGE_KEY = 'scan-demo-authenticated';
 
 interface QRData {
   academyId: string;
@@ -38,11 +42,13 @@ export default function ScanPage() {
   const searchParams = useSearchParams();
   const prefillAcademyId = searchParams?.get('academyId');
 
-  const [step, setStep] = useState<Step>('scanning');
+  const [step, setStep] = useState<Step>('login');
   const [scannerState, setScannerState] = useState<ScannerState>('idle');
   const [qrData, setQrData] = useState<QRData | null>(null);
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [result, setResult] = useState<CheckInResult | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +166,13 @@ export default function ScanPage() {
   }, [cleanupScanner, initializeScanner]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const authenticated = window.sessionStorage.getItem(SCAN_LOGIN_STORAGE_KEY) === 'true';
+    setStep(authenticated ? 'scanning' : 'login');
+  }, []);
+
+  useEffect(() => {
     if (prefillAcademyId) {
       setError(null);
     }
@@ -174,6 +187,22 @@ export default function ScanPage() {
       cleanupScanner();
     }
   }, [cleanupScanner, step]);
+
+  const handleLogin = () => {
+    if (username.trim() !== SCAN_DEMO_USERNAME || password !== SCAN_DEMO_PASSWORD) {
+      setError('Invalid credentials. Use the demo scan login provided.');
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(SCAN_LOGIN_STORAGE_KEY, 'true');
+    }
+
+    setError(null);
+    setUsername('');
+    setPassword('');
+    setStep('scanning');
+  };
 
   const handleSubmitPhone = async () => {
     if (!phone || phone.length < 10) {
@@ -358,6 +387,67 @@ export default function ScanPage() {
         </motion.div>
       )}
     </div>
+  );
+
+  const renderLogin = () => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="min-h-screen bg-[#0B1220] flex flex-col items-center justify-center p-6"
+    >
+      <div className="w-full max-w-sm rounded-[28px] border border-white/10 bg-[#121927] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+        <div className="text-center mb-8">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FF6B35]/12">
+            <LockKeyhole className="h-7 w-7 text-[#FF6B35]" />
+          </div>
+          <h1 className="text-2xl font-bold text-[#F7F6F2] font-['Space_Grotesk',sans-serif]">
+            Scan Login
+          </h1>
+          <p className="mt-2 text-sm text-[#F7F6F2]/60">
+            Sign in before opening the academy scanner flow.
+          </p>
+        </div>
+
+        {error && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-xl p-4 mb-4 text-center"
+          >
+            <p className="text-[#ef4444] text-sm">{error}</p>
+          </motion.div>
+        )}
+
+        <div className="space-y-4">
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Username"
+            className="w-full bg-[#1a2332] border border-[#2a3542] rounded-xl px-4 py-4 text-base text-center text-[#F7F6F2] placeholder-[#F7F6F2]/40 focus:outline-none focus:border-[#FF6B35] transition-colors"
+            autoFocus
+          />
+
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full bg-[#1a2332] border border-[#2a3542] rounded-xl px-4 py-4 text-base text-center text-[#F7F6F2] placeholder-[#F7F6F2]/40 focus:outline-none focus:border-[#FF6B35] transition-colors"
+          />
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleLogin}
+            disabled={!username || !password}
+            className="w-full bg-[#FF6B35] disabled:bg-[#FF6B35]/50 text-white py-4 rounded-xl font-semibold text-lg transition-colors"
+          >
+            Continue To Scan
+          </motion.button>
+        </div>
+      </div>
+    </motion.div>
   );
 
   const renderPhone = () => (
@@ -681,6 +771,7 @@ export default function ScanPage() {
 
   return (
     <AnimatePresence mode="wait">
+      {step === 'login' && <div key="login">{renderLogin()}</div>}
       {step === 'scanning' && <div key="scanning">{renderScanning()}</div>}
       {step === 'phone' && <div key="phone">{renderPhone()}</div>}
       {step === 'name' && <div key="name">{renderName()}</div>}

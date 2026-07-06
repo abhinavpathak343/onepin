@@ -9,11 +9,22 @@ import { Camera, Gift, Zap, Target, Trophy, ShieldAlert, LockKeyhole } from 'luc
 type Step = 'login' | 'scanning' | 'result';
 type ScannerState = 'idle' | 'requesting-permission' | 'permission-denied' | 'ready' | 'error';
 
-const SCAN_DEMO_USERNAME = 'abhinav';
 const SCAN_DEMO_PASSWORD = 'onepin';
-const SCAN_DEMO_PHONE = '9548625856';
-const SCAN_DEMO_NAME = 'Abhinav';
 const SCAN_LOGIN_STORAGE_KEY = 'scan-demo-authenticated';
+const SCAN_ACTIVE_USER_STORAGE_KEY = 'scan-demo-user';
+
+const SCAN_DEMO_USERS = {
+  pawan: {
+    name: 'Pawan',
+    phone: '9876543210',
+  },
+  abhinav: {
+    name: 'Abhinav',
+    phone: '9548625856',
+  },
+} as const;
+
+type ScanDemoUsername = keyof typeof SCAN_DEMO_USERS;
 
 interface QRData {
   academyId: string;
@@ -53,6 +64,7 @@ export default function ScanPage() {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [activeDemoUser, setActiveDemoUser] = useState<ScanDemoUsername>('abhinav');
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerInitializedRef = useRef(false);
@@ -71,6 +83,7 @@ export default function ScanPage() {
   const submitCheckIn = useCallback(async (payload: QRData) => {
     setChecking(true);
     setError(null);
+    const demoUser = SCAN_DEMO_USERS[activeDemoUser];
 
     try {
       const res = await fetch('/api/checkin', {
@@ -78,8 +91,8 @@ export default function ScanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           qrData: payload,
-          phone: SCAN_DEMO_PHONE,
-          name: SCAN_DEMO_NAME,
+          phone: demoUser.phone,
+          name: demoUser.name,
         }),
       });
 
@@ -98,7 +111,7 @@ export default function ScanPage() {
     } finally {
       setChecking(false);
     }
-  }, []);
+  }, [activeDemoUser]);
 
   const handleScanSuccess = useCallback((decodedText: string) => {
     try {
@@ -202,6 +215,10 @@ export default function ScanPage() {
     if (typeof window === 'undefined') return;
 
     const authenticated = window.sessionStorage.getItem(SCAN_LOGIN_STORAGE_KEY) === 'true';
+    const storedUser = window.sessionStorage.getItem(SCAN_ACTIVE_USER_STORAGE_KEY);
+    if (storedUser === 'pawan' || storedUser === 'abhinav') {
+      setActiveDemoUser(storedUser);
+    }
     setStep(authenticated ? 'scanning' : 'login');
   }, []);
 
@@ -222,15 +239,21 @@ export default function ScanPage() {
   }, [cleanupScanner, step]);
 
   const handleLogin = () => {
-    if (username.trim() !== SCAN_DEMO_USERNAME || password !== SCAN_DEMO_PASSWORD) {
-      setError('Invalid credentials. Use the demo scan login provided.');
+    const normalizedUsername = username.trim().toLowerCase();
+    if (
+      (normalizedUsername !== 'pawan' && normalizedUsername !== 'abhinav') ||
+      password !== SCAN_DEMO_PASSWORD
+    ) {
+      setError('Invalid credentials. Use pawan or abhinav with onepin.');
       return;
     }
 
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(SCAN_LOGIN_STORAGE_KEY, 'true');
+      window.sessionStorage.setItem(SCAN_ACTIVE_USER_STORAGE_KEY, normalizedUsername);
     }
 
+    setActiveDemoUser(normalizedUsername as ScanDemoUsername);
     setError(null);
     setUsername('');
     setPassword('');
@@ -384,6 +407,9 @@ export default function ScanPage() {
           </h1>
           <p className="mt-2 text-sm text-[#F7F6F2]/60">
             Sign in before opening the academy scanner flow.
+          </p>
+          <p className="mt-3 text-xs uppercase tracking-[0.22em] text-[#F7F6F2]/38">
+            Demo users: pawan / onepin and abhinav / onepin
           </p>
         </div>
 

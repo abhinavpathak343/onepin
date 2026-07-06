@@ -9,9 +9,10 @@ import { Camera, Gift, Zap, Target, Trophy, ShieldAlert, LockKeyhole } from 'luc
 type Step = 'login' | 'scanning' | 'result';
 type ScannerState = 'idle' | 'requesting-permission' | 'permission-denied' | 'ready' | 'error';
 
-const SCAN_DEMO_USERNAME = 'pawan';
+const SCAN_DEMO_USERNAME = 'abhinav';
 const SCAN_DEMO_PASSWORD = 'onepin';
-const SCAN_DEMO_PHONE = '9876543210';
+const SCAN_DEMO_PHONE = '9548625856';
+const SCAN_DEMO_NAME = 'Abhinav';
 const SCAN_LOGIN_STORAGE_KEY = 'scan-demo-authenticated';
 
 interface QRData {
@@ -78,7 +79,7 @@ export default function ScanPage() {
         body: JSON.stringify({
           qrData: payload,
           phone: SCAN_DEMO_PHONE,
-          name: 'Pawan',
+          name: SCAN_DEMO_NAME,
         }),
       });
 

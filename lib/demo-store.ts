@@ -87,6 +87,7 @@ function createSeedData(): DemoStore {
   const now = new Date();
   const academyId = 'academy-1';
   const studentId = 'student-1';
+  const student2Id = 'student-2';
   const adminId = 'admin-1';
   const superadminId = 'superadmin-1';
   const milestone1Id = 'milestone-1';
@@ -135,6 +136,18 @@ function createSeedData(): DemoStore {
         longestStreak: 4,
         lastCheckinDate: new Date(now.getTime() - 26 * 60 * 60 * 1000),
         awardedMilestoneIds: [milestone1Id],
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        _id: student2Id,
+        phone: '9548625856',
+        name: 'Abhinav',
+        points: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+        lastCheckinDate: null,
+        awardedMilestoneIds: [],
         createdAt: now,
         updatedAt: now,
       },
@@ -216,7 +229,7 @@ function createSeedData(): DemoStore {
       academy: 1,
       admin: 1,
       superadmin: 1,
-      student: 1,
+      student: 2,
       milestone: 3,
       checkin: 3,
       coupon: 2,
